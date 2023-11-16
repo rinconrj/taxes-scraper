@@ -1,5 +1,6 @@
 package main
 
+// Import necessary libraries
 import (
 	"context"
 	"fmt"
@@ -11,53 +12,55 @@ import (
 	"github.com/rinconrj/golang-scraper/internal/google"
 )
 
+// Initialize global variables
 var (
-	client *http.Client
-	docs   []contaja.Doc
+	client *http.Client  // HTTP client to manage our requests
+	docs   []contaja.Doc // Variable to store documents fetched from Contaja
 )
 
+// Initialize function to setup our cookie-enabled HTTP client
 func init() {
-	jar, _ := cookiejar.New(nil)
-	client = &http.Client{
+	jar, _ := cookiejar.New(nil) // Create cookie jar
+	client = &http.Client{       // Initialize HTTP client with cookie jar
 		Jar: jar,
 	}
-
 }
 
+// Main function runs when the program starts
 func main() {
-	http.HandleFunc("/", handleMain)
-	http.HandleFunc("/callback", handleCallback)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	http.HandleFunc("/", handleMain)             // Redirect main site endpoint to handleMain() function
+	http.HandleFunc("/callback", handleCallback) // Redirect OAuth2 callback endpoint to handleCallback() function
+	log.Fatal(http.ListenAndServe(":8080", nil)) // Start the server on port 8080
 }
 
+// Function to handle web requests on main site
 func handleMain(w http.ResponseWriter, r *http.Request) {
-	cookies, csrfToken := contaja.GetTokens(client)
-	logErr := contaja.ContajaLogin(client, csrfToken, cookies)
-	if logErr != nil {
+	cookies, csrfToken := contaja.GetTokens(client)            // Get authentication tokens from Contaja
+	logErr := contaja.ContajaLogin(client, csrfToken, cookies) // Log into Contaja
+	if logErr != nil {                                         // Check for login errors
 		fmt.Println("login error:", logErr)
 		return
 	}
-
-	docs, err := contaja.GetFiles(client)
-	if err != nil {
+	docs, err := contaja.GetFiles(client) // Fetch files from Contaja
+	if err != nil {                       // Check for file fetching errors
 		fmt.Println("get files from portal error:", err)
 		return
 	}
-	google.CreateEventFromDocs(docs, w, r)
-
+	google.CreateEventFromDocs(docs, w, r) // Create events from documents fetched from Contaja
 }
 
+// Function to handle web requests on Oauth2 callback endpoint
 func handleCallback(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-	oauthConfig := google.GetOauthConfig()
-	code := r.URL.Query().Get("code")
+	ctx := context.Background()            // Get current context
+	oauthConfig := google.GetOauthConfig() // Get Google OAuth2 credentials
+	code := r.URL.Query().Get("code")      // Fetch auth code from URL query
 	fmt.Println("google code:", code)
-	tok, err := oauthConfig.Exchange(ctx, code)
-	if err != nil {
+	tok, err := oauthConfig.Exchange(ctx, code) // Exchange auth code for token
+	if err != nil {                             // Check for OAuth2 code exchange errors
 		fmt.Println("error: oauthConfig.Exchange")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError) // Return Internal Server Error if exchange fails
 		return
 	}
-	google.SaveToken(tok)
-	google.CreateEventFromDocs(docs, w, r)
+	google.SaveToken(tok)                  // Save received auth token for further use
+	google.CreateEventFromDocs(docs, w, r) // Create events from documents previously fetched from Contaja
 }
