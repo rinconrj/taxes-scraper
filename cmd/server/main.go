@@ -10,6 +10,8 @@ import (
 
 	"github.com/rinconrj/golang-scraper/internal/contaja"
 	"github.com/rinconrj/golang-scraper/internal/google"
+
+	"github.com/joho/godotenv"
 )
 
 // Initialize global variables
@@ -20,6 +22,11 @@ var (
 
 // Initialize function to setup our cookie-enabled HTTP client
 func init() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	jar, _ := cookiejar.New(nil) // Create cookie jar
 	client = &http.Client{       // Initialize HTTP client with cookie jar
 		Jar: jar,
