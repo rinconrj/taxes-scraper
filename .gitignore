@@ -18,6 +18,7 @@
 # vendor/
 .env
 credentials.json
+token.json
 
 # Go workspace file
 go.work
