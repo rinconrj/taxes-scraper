@@ -31,19 +31,18 @@ func main() {
 }
 
 func handleMain(w http.ResponseWriter, r *http.Request) {
-
 	cookies, csrfToken := contaja.GetTokens(client)
-
 	logErr := contaja.ContajaLogin(client, csrfToken, cookies)
 	if logErr != nil {
 		fmt.Println("login error:", logErr)
+		return
 	}
 
 	docs, err := contaja.GetFiles(client)
 	if err != nil {
 		fmt.Println("get files from portal error:", err)
+		return
 	}
-
 	google.CreateEventFromDocs(docs, w, r)
 
 }
