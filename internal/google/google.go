@@ -17,17 +17,25 @@ import (
 
 const credentialsFile = "credentials.json"
 
-func NewClient(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) *http.Client {
-	return oauthConfig.Client(ctx, token)
+type Configer struct {
+	Config *oauth2.Config
 }
 
-func CreateEventFromDocs(docs []contaja.Doc, w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-	srv, err := NewService(ctx, w, r)
-	if err != nil {
-		return
+type Client struct {
+	Client *http.Client
+}
+
+func NewClient(ctx context.Context, tok *oauth2.Token) *Client {
+	conf := &Configer{
+		Config: GetOauthConfig(),
 	}
 
+	return &Client{
+		Client: conf.Config.Client(ctx, tok),
+	}
+}
+
+func CreateEventFromDocs(srv *calendar.Service, docs []contaja.Doc) {
 	for _, v := range docs {
 		fmt.Println("value", v)
 
@@ -64,22 +72,18 @@ func CreateEventFromDocs(docs []contaja.Doc, w http.ResponseWriter, r *http.Requ
 
 }
 
-func NewService(ctx context.Context, w http.ResponseWriter, r *http.Request) (*calendar.Service, error) {
-	oauthConfig := GetOauthConfig()
-	token, err := GetTokenFromFile(ctx)
+func (c Client) NewService(ctx context.Context) (*calendar.Service, error) {
+	srv, err := calendar.NewService(ctx, option.WithHTTPClient(c.Client))
 	if err != nil {
-		fmt.Println("local token not found, fetching from google")
-		url := oauthConfig.AuthCodeURL("state", oauth2.AccessTypeOffline)
-		http.Redirect(w, r, url, http.StatusFound)
-		return nil, err
-	}
-	client := NewClient(ctx, oauthConfig, token)
-	srv, err := calendar.NewService(ctx, option.WithHTTPClient(client))
-	if err != nil {
-		log.Fatalf("Unable to retrieve Calendar client: %v", err)
+		log.Println("Unable to retrieve Calendar client: %v", err)
 		return nil, err
 	}
 	return srv, nil
+}
+
+func (conf Configer) FetchCode() {
+	url := conf.Config.AuthCodeURL("state", oauth2.AccessTypeOffline)
+	http.RedirectHandler(url, http.StatusFound)
 }
 
 func CreateEvent(service *calendar.Service, calendarID string, event *calendar.Event) (*calendar.Event, error) {

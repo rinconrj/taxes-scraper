@@ -1,7 +1,6 @@
 package google
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,31 +11,30 @@ import (
 
 const tokFile = "token.json"
 
-func GetTokenFromFile(ctx context.Context) (*oauth2.Token, error) {
-	tok, err := tokenFromFile(tokFile)
+func GetTokenFromFile(path string) (*oauth2.Token, error) {
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	return tok, nil
-}
+	defer func() { _ = f.Close() }()
 
-func tokenFromFile(file string) (*oauth2.Token, error) {
-	f, err := os.Open(file)
-	if err != nil {
+	tok := &oauth2.Token{}
+	if err := json.NewDecoder(f).Decode(tok); err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	tok := &oauth2.Token{}
-	err = json.NewDecoder(f).Decode(tok)
 	return tok, err
 }
 
-func SaveToken(token *oauth2.Token) {
+func SaveToken(token *oauth2.Token) error {
 	fmt.Printf("Saving credential file to: %s\n", tokFile)
 	f, err := os.OpenFile(tokFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		log.Fatalf("Unable to cache oauth token: %v", err)
+		log.Println("Unable to cache oauth token: %v", err)
+		return err
 	}
-	defer f.Close()
-	json.NewEncoder(f).Encode(token)
+	defer func() { _ = f.Close() }()
+	if err := json.NewEncoder(f).Encode(token); err != nil {
+		return err
+	}
+	return nil
 }
