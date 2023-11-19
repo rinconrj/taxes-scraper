@@ -1,15 +1,21 @@
 package contaja
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/rinconrj/golang-scraper/internal/google"
+	"google.golang.org/api/calendar/v3"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 )
 
 const loginURL = "https://app.contaja.com.br/login"
@@ -42,6 +48,15 @@ type Client struct {
 	client      *http.Client
 	credentials Credentials
 }
+type Server struct {
+	URL        string
+	Listener   net.Listener
+	closed     bool
+	HTTPClient *Client // Embed the Client in the Server struct
+	wg         sync.WaitGroup
+	mu         sync.Mutex
+	Config     *http.Server
+}
 
 func NewClient(credentials Credentials) *Client {
 	jar, _ := cookiejar.New(nil)
@@ -53,6 +68,63 @@ func NewClient(credentials Credentials) *Client {
 		client:      c,
 		credentials: credentials,
 	}
+}
+
+func NewServer(handler http.Handler, credentials Credentials) *Server {
+	client := NewClient(credentials)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/callback", client.HandleCallback)
+
+	s := &Server{
+		HTTPClient: client,
+		Config:     &http.Server{Handler: mux},
+	}
+	s.Start()
+
+	return s
+}
+
+func (s *Server) Start() {
+	s.Listener, _ = net.Listen("tcp", ":8080")
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		http.Serve(s.Listener, nil)
+	}()
+}
+
+func (s *Server) Stop() {
+	s.Listener.Close()
+	s.wg.Wait()
+}
+
+func (c *Client) HandleCallback(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	config := google.GetOauthConfig()
+
+	code := r.URL.Query().Get("code")
+	fmt.Println("google code:", code)
+
+	tok, err := config.Config.Exchange(ctx, code)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	if err := google.SaveToken(tok); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	client := google.NewClient(ctx, tok)
+	srv, err := client.NewService(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	docs, err := c.GetFiles()
+
+	events := ParseEvents(docs)
+
+	google.CreateEventFromDocs(srv, events)
 }
 
 func (c *Client) GetTokens() (string, string, error) {
@@ -121,8 +193,8 @@ func (c *Client) GetFiles() ([]Doc, error) {
 		fmt.Println("Error to fetch the files:", err)
 		return nil, err
 	}
-
 	defer func() { _ = res.Body.Close() }()
+
 	var v Response
 
 	decoder := json.NewDecoder(res.Body)
@@ -138,6 +210,36 @@ func (c *Client) GetFiles() ([]Doc, error) {
 	docs = append(docs, v.Data...)
 
 	return docs, err
+}
+
+func ParseEvents(docs []Doc) []*calendar.Event {
+	var events []*calendar.Event
+	for _, v := range docs {
+		sd, err := timeParser(v.Vencimento, time.RFC3339, 17)
+		if err != nil {
+			fmt.Println("Error occurred:", err)
+		}
+		ed, err := timeParser(v.Vencimento, time.RFC3339, 20)
+		if err != nil {
+			fmt.Println("Error occurred:", err)
+		}
+
+		event := &calendar.Event{
+			Summary:     fmt.Sprintf("%s %s", v.Descricao, 23, v.Competencia),
+			Location:    "",
+			Description: v.Actions,
+			Start: &calendar.EventDateTime{
+				DateTime: sd,
+				TimeZone: "America/Sao_Paulo",
+			},
+			End: &calendar.EventDateTime{
+				DateTime: ed,
+				TimeZone: "America/Sao_Paulo",
+			},
+		}
+		events = append(events, event)
+	}
+	return events
 }
 
 func extractCSRFToken(html string) string {
@@ -159,4 +261,15 @@ func isLogged(html string) bool {
 func extractCookies(resp *http.Response) string {
 	cookies := resp.Header["Set-Cookie"]
 	return strings.Join(cookies, "; ")
+}
+
+func timeParser(psdvalue string, layout string, addHours int) (string, error) {
+	referenceLayout := "02/01/2006"
+	parsed, err := time.Parse(referenceLayout, psdvalue)
+	if err != nil {
+		return "", err
+	}
+	parsed = parsed.Add(time.Duration(addHours) * time.Hour)
+	finalFormat := parsed.Format(layout)
+	return finalFormat, nil
 }

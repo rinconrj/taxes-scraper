@@ -3,10 +3,11 @@ package main
 // Import necessary libraries
 import (
 	"context"
-	"github.com/rinconrj/golang-scraper/internal/google"
 	"log"
 	"os"
 	"os/signal"
+
+	google2 "github.com/rinconrj/golang-scraper/internal/google"
 
 	"github.com/rinconrj/golang-scraper/internal/contaja"
 )
@@ -32,17 +33,17 @@ func Run() error {
 	}()
 
 	cred := contaja.Credentials{
-		Email:    "***REMOVED***",
-		Password: "contaja12s3",
+		Email:    "",
+		Password: "",
 	}
 
-	c := contaja.NewClient(cred)
-	if err := c.ContajaLogin(); err != nil {
+	c := contaja.NewServer(nil, cred)
+	if err := c.HTTPClient.ContajaLogin(); err != nil {
 		return err
 	}
 	log.Println("logged on contaja")
 
-	docs, err := c.GetFiles()
+	docs, err := c.HTTPClient.GetFiles()
 	if len(docs) < 1 {
 		log.Println("New documents not found")
 		return nil
@@ -51,18 +52,22 @@ func Run() error {
 		return err
 	}
 
-	token, err := google.GetTokenFromFile(tokFile)
+	token, err := google2.GetTokenFromFile(tokFile)
 	if err != nil {
+		config := google2.GetOauthConfig()
+		config.FetchCode()
 		return nil
 	}
 
-	client := google.NewClient(ctx, token)
+	client := google2.NewClient(ctx, token)
 	srv, err := client.NewService(ctx)
 	if err != nil {
 		return err
 	}
 
-	google.CreateEventFromDocs(srv, docs)
+	events := contaja.ParseEvents(docs)
+
+	google2.CreateEventFromDocs(srv, events)
 
 	return nil
 }
