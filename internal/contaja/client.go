@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/rinconrj/golang-scraper/internal/google"
+	"golang.org/x/net/html"
 	"google.golang.org/api/calendar/v3"
 	"io"
 	"log"
@@ -162,6 +163,7 @@ func (c *Client) ContajaLogin() error {
 	req, err := http.NewRequest("POST", loginURL, strings.NewReader(data.Encode()))
 	req.Header.Add("Cookie", cookies)
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	fmt.Println("request:", strings.NewReader(data.Encode()))
 	if err != nil {
 		return err
 	}
@@ -181,7 +183,7 @@ func (c *Client) ContajaLogin() error {
 		if isLogged(string(body)) {
 			return nil
 		}
-		return fmt.Errorf("Login failed")
+		return fmt.Errorf("Login failed:")
 	}
 
 	return res.Request.Context().Err()
@@ -224,10 +226,15 @@ func ParseEvents(docs []Doc) []*calendar.Event {
 			fmt.Println("Error occurred:", err)
 		}
 
+		description, err := extractLinks(v.Actions)
+		if err != nil {
+			fmt.Println("Error extracting links:", err)
+		}
+
 		event := &calendar.Event{
-			Summary:     fmt.Sprintf("%s %s", v.Descricao, 23, v.Competencia),
+			Summary:     fmt.Sprintf("%s %s", v.Descricao, v.Competencia),
 			Location:    "",
-			Description: v.Actions,
+			Description: strings.Join(description, " "),
 			Start: &calendar.EventDateTime{
 				DateTime: sd,
 				TimeZone: "America/Sao_Paulo",
@@ -253,14 +260,41 @@ func extractCSRFToken(html string) string {
 }
 
 func isLogged(html string) bool {
-	r := regexp.MustCompile(`name="class" value="m-login__body"`)
+	r := regexp.MustCompile(`id="contaja-app-cliente"`)
 	matches := r.FindStringSubmatch(html)
-	return len(matches) > 2
+	fmt.Println(matches)
+	return len(matches) > 0
 }
 
 func extractCookies(resp *http.Response) string {
 	cookies := resp.Header["Set-Cookie"]
 	return strings.Join(cookies, "; ")
+}
+
+func extractLinks(htmlDoc string) ([]string, error) {
+	doc, err := html.Parse(strings.NewReader(htmlDoc))
+	if err != nil {
+		return nil, err
+	}
+
+	var links []string
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "a" {
+			for _, a := range n.Attr {
+				if a.Key == "href" {
+					links = append(links, a.Val)
+					break
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
+
+	f(doc)
+	return links, nil
 }
 
 func timeParser(psdvalue string, layout string, addHours int) (string, error) {

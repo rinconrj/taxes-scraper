@@ -7,12 +7,19 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/spf13/viper"
+
 	google2 "github.com/rinconrj/golang-scraper/internal/google"
 
 	"github.com/rinconrj/golang-scraper/internal/contaja"
 )
 
 const tokFile = "token.json"
+
+var (
+	email    = viperEnvVariable("EMAIL")
+	password = viperEnvVariable("PASSWORD")
+)
 
 // Main function runs when the program starts
 func main() {
@@ -33,8 +40,8 @@ func Run() error {
 	}()
 
 	cred := contaja.Credentials{
-		Email:    "",
-		Password: "",
+		Email:    email,
+		Password: password,
 	}
 
 	c := contaja.NewServer(nil, cred)
@@ -70,4 +77,24 @@ func Run() error {
 	google2.CreateEventFromDocs(srv, events)
 
 	return nil
+}
+
+func viperEnvVariable(key string) string {
+	viper.SetConfigFile(".env")
+	err := viper.ReadInConfig()
+
+	if err != nil {
+		log.Fatalf("Error while reading config file %s", err)
+	}
+
+	value, ok := viper.Get(key).(string)
+	if !ok {
+		log.Fatalf("Invalid type assertion")
+	}
+
+	if value == "" {
+		log.Fatalf("Variable %s is empty", key)
+	}
+
+	return value
 }
