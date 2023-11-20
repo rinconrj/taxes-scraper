@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rinconrj/golang-scraper/internal/google"
-	"golang.org/x/net/html"
-	"google.golang.org/api/calendar/v3"
 	"io"
 	"log"
 	"net"
@@ -17,6 +14,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rinconrj/golang-scraper/internal/google"
+	"golang.org/x/net/html"
+	"google.golang.org/api/calendar/v3"
 )
 
 const loginURL = "https://app.contaja.com.br/login"
@@ -52,10 +53,8 @@ type Client struct {
 type Server struct {
 	URL        string
 	Listener   net.Listener
-	closed     bool
-	HTTPClient *Client // Embed the Client in the Server struct
+	HTTPClient *Client
 	wg         sync.WaitGroup
-	mu         sync.Mutex
 	Config     *http.Server
 }
 
@@ -72,15 +71,15 @@ func NewClient(credentials Credentials) *Client {
 }
 
 func NewServer(handler http.Handler, credentials Credentials) *Server {
-	client := NewClient(credentials)
-
 	mux := http.NewServeMux()
-	mux.HandleFunc("/callback", client.HandleCallback)
 
 	s := &Server{
-		HTTPClient: client,
+		HTTPClient: NewClient(credentials),
 		Config:     &http.Server{Handler: mux},
 	}
+
+	mux.HandleFunc("/callback", s.HandleCallback)
+
 	s.Start()
 
 	return s
@@ -100,7 +99,7 @@ func (s *Server) Stop() {
 	s.wg.Wait()
 }
 
-func (c *Client) HandleCallback(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	config := google.GetOauthConfig()
@@ -121,11 +120,16 @@ func (c *Client) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	docs, err := c.GetFiles()
+	docs, err := s.HTTPClient.GetFiles()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 
 	events := ParseEvents(docs)
 
 	google.CreateEventFromDocs(srv, events)
+
+	s.Stop()
 }
 
 func (c *Client) GetTokens() (string, string, error) {
@@ -183,7 +187,7 @@ func (c *Client) ContajaLogin() error {
 		if isLogged(string(body)) {
 			return nil
 		}
-		return fmt.Errorf("Login failed:")
+		return fmt.Errorf("login failed")
 	}
 
 	return res.Request.Context().Err()
@@ -192,7 +196,7 @@ func (c *Client) ContajaLogin() error {
 func (c *Client) GetFiles() ([]Doc, error) {
 	res, err := c.client.Get(query)
 	if err != nil {
-		fmt.Println("Error to fetch the files:", err)
+		log.Println("Error to fetch the files:", err)
 		return nil, err
 	}
 	defer func() { _ = res.Body.Close() }()
@@ -204,7 +208,7 @@ func (c *Client) GetFiles() ([]Doc, error) {
 	if err != nil {
 		body, _ := io.ReadAll(res.Body)
 		fmt.Println(string(body))
-		fmt.Println("Error decoding files:", err)
+		log.Println("Error decoding files:", err)
 		return nil, err
 	}
 
@@ -219,16 +223,16 @@ func ParseEvents(docs []Doc) []*calendar.Event {
 	for _, v := range docs {
 		sd, err := timeParser(v.Vencimento, time.RFC3339, 17)
 		if err != nil {
-			fmt.Println("Error occurred:", err)
+			log.Println("Error occurred:", err)
 		}
 		ed, err := timeParser(v.Vencimento, time.RFC3339, 20)
 		if err != nil {
-			fmt.Println("Error occurred:", err)
+			log.Println("Error occurred:", err)
 		}
 
 		description, err := extractLinks(v.Actions)
 		if err != nil {
-			fmt.Println("Error extracting links:", err)
+			log.Println("Error extracting links:", err)
 		}
 
 		event := &calendar.Event{
@@ -253,7 +257,7 @@ func extractCSRFToken(html string) string {
 	r := regexp.MustCompile(`name="_token" value="(.+?)"`)
 	matches := r.FindStringSubmatch(html)
 	if len(matches) < 2 {
-		fmt.Println("CSRF token not found")
+		log.Println("CSRF token not found")
 		return ""
 	}
 	return matches[1]
@@ -262,7 +266,7 @@ func extractCSRFToken(html string) string {
 func isLogged(html string) bool {
 	r := regexp.MustCompile(`id="contaja-app-cliente"`)
 	matches := r.FindStringSubmatch(html)
-	fmt.Println(matches)
+
 	return len(matches) > 0
 }
 
