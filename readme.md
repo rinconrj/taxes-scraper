@@ -9,35 +9,39 @@ This Go server is designed to interact with the Contaja and Google services. It 
 
 ### Prerequisites
 - Go installed on your system
-- Contaja and Google API credentials set up
+
+- Contaja credential in the .env file:
+```
+EMAIL='email@email.com'
+PASSWORD='secretpass'
+```
+
+- Set Up Google Calendar API:
+
+1. Go to the Google Developers Console.
+2. Create a new project or select an existing one.
+3. Enable the Google Calendar API for your project.
+4. Create credentials (OAuth client ID) for your application. Download the JSON file containing these credentials.
+5. And save it in the root folder as "credentials.json"
 
 ### Setup
-Clone the repository and build the server:
+Clone the repository:
 ```bash
 git clone https://github.com/rinconrj/golang-scraper.git
 cd golang-scraper
-go build
 ```
 
 ## Usage
 
 Run the server:
 ```bash
-./golang-scraper
+make run
 ```
-The server will start on `localhost:8080`. It has two main endpoints:
+The server will start on `localhost:8080`. It has a main endpoint:
 
-- `/`: The main site endpoint. It logs into Contaja, fetches documents, and creates Google Calendar events based on these documents.
 - `/callback`: The OAuth2 callback endpoint for Google. It handles the authentication flow and token exchange.
 
-## Endpoints
-
-### `GET /`
-This endpoint performs several actions:
-1. Retrieves authentication tokens from Contaja.
-2. Logs into Contaja using the fetched tokens.
-3. Fetches documents from Contaja.
-4. Creates Google Calendar events based on the fetched documents.
+## Endpoint
 
 ### `GET /callback`
 This endpoint handles the OAuth2 callback for Google. It performs the following:

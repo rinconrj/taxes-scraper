@@ -3,6 +3,7 @@ package main
 // Import necessary libraries
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -21,30 +22,25 @@ var (
 	password = viperEnvVariable("PASSWORD")
 )
 
-// Main function runs when the program starts
+
 func main() {
-	err := Run()
-	log.Fatal(err)
-	// Start the server on port 8080
+	if err := run(); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
 }
 
-func Run() error {
-	channel := make(chan os.Signal, 1)
-	signal.Notify(channel, os.Interrupt)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		oscall := <-channel
-		log.Printf("system call:%+v", oscall)
-		cancel()
-	}()
+func run() error {
+	ctx, stop := signal.NotifyContext(context.Background())
+	defer stop()
 
 	cred := contaja.Credentials{
 		Email:    email,
 		Password: password,
 	}
 
-	c := contaja.NewServer(nil, cred)
+	c := contaja.NewServer(cred)
 	if err := c.HTTPClient.ContajaLogin(); err != nil {
 		return err
 	}
@@ -75,6 +71,8 @@ func Run() error {
 	events := contaja.ParseEvents(docs)
 
 	google2.CreateEventFromDocs(srv, events)
+
+	c.Stop()
 
 	return nil
 }

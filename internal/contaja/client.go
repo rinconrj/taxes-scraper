@@ -70,7 +70,7 @@ func NewClient(credentials Credentials) *Client {
 	}
 }
 
-func NewServer(handler http.Handler, credentials Credentials) *Server {
+func NewServer(credentials Credentials) *Server {
 	mux := http.NewServeMux()
 
 	s := &Server{
