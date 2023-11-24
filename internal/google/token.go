@@ -9,7 +9,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const tokFile = "token.json"
+const TokFile = "token.json"
 
 func GetTokenFromFile(path string) (*oauth2.Token, error) {
 	f, err := os.Open(path)
@@ -26,10 +26,10 @@ func GetTokenFromFile(path string) (*oauth2.Token, error) {
 }
 
 func SaveToken(token *oauth2.Token) error {
-	fmt.Printf("Saving credential file to: %s\n", tokFile)
-	f, err := os.OpenFile(tokFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	fmt.Printf("Saving credential file to: %s\n", TokFile)
+	f, err := os.OpenFile(TokFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		log.Println("Unable to cache oauth token: %v", err)
+		log.Printf("Unable to cache oauth token: %v", err)
 		return err
 	}
 	defer func() { _ = f.Close() }()

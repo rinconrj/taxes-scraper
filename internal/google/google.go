@@ -2,17 +2,17 @@ package google
 
 import (
 	"context"
-	"fmt"
+	"log"
+	"net/http"
+	"os"
+
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
-	"log"
-	"net/http"
-	"os"
 )
 
-const credentialsFile = "credentials.json"
+const CredentialsFile = "credentials.json"
 
 type Configer struct {
 	Config *oauth2.Config
@@ -22,8 +22,8 @@ type Client struct {
 	Client *http.Client
 }
 
-func NewClient(ctx context.Context, tok *oauth2.Token) *Client {
-	conf := GetOauthConfig()
+func NewClient(ctx context.Context, tok *oauth2.Token, file string) *Client {
+	conf := GetOauthConfig(file)
 
 	return &Client{
 		Client: conf.Config.Client(ctx, tok),
@@ -44,7 +44,7 @@ func CreateEventFromDocs(srv *calendar.Service, events []*calendar.Event) {
 func (c Client) NewService(ctx context.Context) (*calendar.Service, error) {
 	srv, err := calendar.NewService(ctx, option.WithHTTPClient(c.Client))
 	if err != nil {
-		log.Println("Unable to retrieve Calendar client: %v", err)
+		log.Printf("Unable to retrieve Calendar client: %v", err)
 		return nil, err
 	}
 	return srv, nil
@@ -58,16 +58,18 @@ func (conf Configer) FetchCode() {
 func CreateEvent(service *calendar.Service, calendarID string, event *calendar.Event) (*calendar.Event, error) {
 	createdEvent, err := service.Events.Insert(calendarID, event).Do()
 	if err != nil {
+		log.Printf("Unable to create event. %v\n", err)
+
 		return nil, err
 	}
 
-	fmt.Printf("Event created: %s\n", createdEvent.HtmlLink)
+	// fmt.Printf("Event created: %s\n", createdEvent.HtmlLink)
 
 	return createdEvent, nil
 }
 
-func GetOauthConfig() *Configer {
-	b, err := os.ReadFile(credentialsFile)
+func GetOauthConfig(f string) *Configer {
+	b, err := os.ReadFile(f)
 	if err != nil {
 		log.Fatalf("Unable to read client secret file: %v", err)
 		panic(err)

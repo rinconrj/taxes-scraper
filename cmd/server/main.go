@@ -7,14 +7,14 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/spf13/viper"
-
 	google2 "github.com/rinconrj/golang-scraper/internal/google"
+	"github.com/spf13/viper"
 
 	"github.com/rinconrj/golang-scraper/internal/contaja"
 )
 
 const tokFile = "token.json"
+const CredentialsFile = "credentials.json"
 
 var (
 	email    = viperEnvVariable("EMAIL")
@@ -61,12 +61,12 @@ func Run() error {
 
 	token, err := google2.GetTokenFromFile(tokFile)
 	if err != nil {
-		config := google2.GetOauthConfig()
+		config := google2.GetOauthConfig(CredentialsFile)
 		config.FetchCode()
 		return nil
 	}
 
-	client := google2.NewClient(ctx, token)
+	client := google2.NewClient(ctx, token, CredentialsFile)
 	srv, err := client.NewService(ctx)
 	if err != nil {
 		return err

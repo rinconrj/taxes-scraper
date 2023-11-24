@@ -102,10 +102,10 @@ func (s *Server) Stop() {
 func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
-	config := google.GetOauthConfig()
-
 	code := r.URL.Query().Get("code")
 	fmt.Println("google code:", code)
+
+	config := google.GetOauthConfig(google.CredentialsFile)
 
 	tok, err := config.Config.Exchange(ctx, code)
 	if err != nil {
@@ -115,7 +115,7 @@ func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	client := google.NewClient(ctx, tok)
+	client := google.NewClient(ctx, tok, google.CredentialsFile)
 	srv, err := client.NewService(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -140,21 +140,21 @@ func (c *Client) GetTokens() (string, string, error) {
 	defer func() { _ = html.Body.Close() }()
 
 	cookies := extractCookies(html)
-	fmt.Println("Extracted Cookies:", cookies)
+	log.Println("Extracted Cookies")
 
 	body, err := io.ReadAll(html.Body)
 	if err != nil {
 		return "", "", err
 	}
 	csrfToken := extractCSRFToken(string(body))
-	log.Println("Extracted csrfToken:", csrfToken)
+	log.Println("Extracted csrfToken")
 
 	return cookies, csrfToken, nil
 }
 
 func (c *Client) ContajaLogin() error {
 	cookies, csrfToken, err := c.GetTokens()
-	fmt.Println("cookies fetched:", cookies, csrfToken)
+	log.Println("cookies fetched")
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,6 @@ func (c *Client) ContajaLogin() error {
 	req, err := http.NewRequest("POST", loginURL, strings.NewReader(data.Encode()))
 	req.Header.Add("Cookie", cookies)
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	fmt.Println("request:", strings.NewReader(data.Encode()))
 	if err != nil {
 		return err
 	}

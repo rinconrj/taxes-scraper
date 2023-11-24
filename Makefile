@@ -16,7 +16,7 @@ clean:
 	rm ${BINARY_NAME}-windows
 
 test:
-	go test ./...
+	go test ./... -v --race
 
 test_coverage:
 	go test ./... -coverprofile=coverage.out
