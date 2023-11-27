@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rinconrj/golang-scraper/internal/google"
+	google2 "github.com/rinconrj/golang-scraper/internal/google"
 	"golang.org/x/net/html"
 	"google.golang.org/api/calendar/v3"
 )
@@ -58,6 +59,8 @@ type Server struct {
 	Config     *http.Server
 }
 
+const CredentialsFile = "credentials.json"
+
 func NewClient(credentials Credentials) *Client {
 	jar, _ := cookiejar.New(nil)
 	c := &http.Client{
@@ -75,23 +78,21 @@ func NewServer(credentials Credentials) *Server {
 
 	s := &Server{
 		HTTPClient: NewClient(credentials),
-		Config:     &http.Server{Handler: mux},
+		Config: &http.Server{
+			Handler: mux,
+			Addr:    ":8080",
+		},
 	}
 
+	mux.HandleFunc("/", s.HandleFunc)
 	mux.HandleFunc("/callback", s.HandleCallback)
-
-	s.Start()
 
 	return s
 }
 
 func (s *Server) Start() {
-	s.Listener, _ = net.Listen("tcp", ":8080")
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		http.Serve(s.Listener, nil)
-	}()
+	log.Printf("Starting server... on port: %s. Please open the browser in that port to continue", s.Config.Addr)
+	s.Config.ListenAndServe()
 }
 
 func (s *Server) Stop() {
@@ -99,8 +100,17 @@ func (s *Server) Stop() {
 	s.wg.Wait()
 }
 
+func (s *Server) HandleFunc(w http.ResponseWriter, r *http.Request) {
+	config := google2.GetOauthConfig(CredentialsFile)
+
+	config.FetchCode(w, r)
+
+}
+
 func (s *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
+
+	fmt.Println("google callback")
 
 	code := r.URL.Query().Get("code")
 	fmt.Println("google code:", code)

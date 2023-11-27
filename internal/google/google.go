@@ -2,6 +2,7 @@ package google
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -50,20 +51,19 @@ func (c Client) NewService(ctx context.Context) (*calendar.Service, error) {
 	return srv, nil
 }
 
-func (conf Configer) FetchCode() {
+func (conf Configer) FetchCode(w http.ResponseWriter, r *http.Request) {
+	log.Println("Fetching code...")
 	url := conf.Config.AuthCodeURL("state", oauth2.AccessTypeOffline)
-	http.RedirectHandler(url, http.StatusFound)
+	http.Redirect(w, r, url, http.StatusFound)
 }
 
 func CreateEvent(service *calendar.Service, calendarID string, event *calendar.Event) (*calendar.Event, error) {
 	createdEvent, err := service.Events.Insert(calendarID, event).Do()
 	if err != nil {
-		log.Printf("Unable to create event. %v\n", err)
-
 		return nil, err
 	}
 
-	// fmt.Printf("Event created: %s\n", createdEvent.HtmlLink)
+	fmt.Printf("Event created: %s\n", createdEvent.HtmlLink)
 
 	return createdEvent, nil
 }

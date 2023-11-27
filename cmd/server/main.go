@@ -22,9 +22,9 @@ var (
 	password = viperEnvVariable("PASSWORD")
 )
 
-
 func main() {
 	if err := run(); err != nil {
+		fmt.Println(err)
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -32,8 +32,7 @@ func main() {
 }
 
 func run() error {
-	ctx, stop := signal.NotifyContext(context.Background())
-	defer stop()
+	ctx, _ := signal.NotifyContext(context.Background())
 
 	cred := contaja.Credentials{
 		Email:    email,
@@ -47,33 +46,34 @@ func run() error {
 	log.Println("logged on contaja")
 
 	docs, err := c.HTTPClient.GetFiles()
+	if err != nil {
+		return err
+	}
+
 	if len(docs) < 1 {
 		log.Println("New documents not found")
 		return nil
 	}
-	if err != nil {
-		return err
-	}
 
 	token, err := google2.GetTokenFromFile(tokFile)
 	if err != nil {
-		config := google2.GetOauthConfig(CredentialsFile)
-		config.FetchCode()
+		c.Start()
+		fmt.Println("token note found:", err)
+	} else {
+		client := google2.NewClient(ctx, token, CredentialsFile)
+		srv, err := client.NewService(ctx)
+		if err != nil {
+			return err
+		}
+
+		events := contaja.ParseEvents(docs)
+
+		google2.CreateEventFromDocs(srv, events)
+
+		c.Stop()
+
 		return nil
 	}
-
-	client := google2.NewClient(ctx, token, CredentialsFile)
-	srv, err := client.NewService(ctx)
-	if err != nil {
-		return err
-	}
-
-	events := contaja.ParseEvents(docs)
-
-	google2.CreateEventFromDocs(srv, events)
-
-	c.Stop()
-
 	return nil
 }
 
